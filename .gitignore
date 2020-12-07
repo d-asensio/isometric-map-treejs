@@ -1,0 +1,13 @@
+# Common IDE files
+.vscode/
+.history
+
+# Dependencies
+node_modules/
+
+# Report and error files
+yarn-error.log
+coverage/
+
+# Generated artifacts
+build/

@@ -1,0 +1,59 @@
+{
+  "name": "js-and-scss-app",
+  "version": "1.0.0",
+  "description": "App made using vanilla JS and SCSS",
+  "author": "David Asensio Cañas <david.asensio@icloud.com>",
+  "license": "MIT",
+  "private": true,
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "webpack serve",
+    "prebuild": "rimraf build",
+    "build": "NODE_ENV=production webpack",
+    "lint": "standard",
+    "lint:fix": "standard --fix",
+    "test": "jest --coverage --verbose",
+    "test:watch": "yarn test --watch"
+  },
+  "lint-staged": {
+    "*.js": [
+      "yarn lint:fix",
+      "jest --bail --findRelatedTests"
+    ]
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": "lint-staged"
+    }
+  },
+  "standard": {
+    "env": {
+      "jest": true,
+      "browser": true
+    }
+  },
+  "devDependencies": {
+    "@babel/core": "^7.12.9",
+    "@babel/preset-env": "^7.12.7",
+    "autoprefixer": "^10.0.4",
+    "babel-loader": "^8.2.2",
+    "copy-webpack-plugin": "^6.3.2",
+    "core-js": "3.8.1",
+    "css-loader": "^5.0.1",
+    "html-webpack-plugin": "^4.5.0",
+    "husky": "^4.3.0",
+    "jest": "^26.6.3",
+    "lint-staged": ">=10.5.3",
+    "mini-css-extract-plugin": "^1.3.2",
+    "node-sass": "^5.0.0",
+    "postcss": "^8.1.14",
+    "postcss-loader": "^4.1.0",
+    "rimraf": "^3.0.2",
+    "sass-loader": "^10.1.0",
+    "standard": "^16.0.3",
+    "style-loader": "^2.0.0",
+    "webpack": "^5.10.0",
+    "webpack-cli": "^4.2.0",
+    "webpack-dev-server": "^3.11.0"
+  }
+}

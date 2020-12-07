@@ -1,0 +1,11 @@
+@mixin sp-inset($_spacing-value) {
+  padding: $_spacing-value;
+}
+
+@mixin sp-inline($_spacing-value) {
+  margin-right: $_spacing-value;
+}
+
+@mixin sp-stack($_spacing-value) {
+  margin-bottom: $_spacing-value;
+}
