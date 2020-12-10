@@ -9,6 +9,8 @@ import {
   MeshStandardMaterial
 } from 'three'
 
+import Stats from 'three/examples/jsm/libs/stats.module.js'
+
 import { GUI } from 'dat.gui'
 
 function createGuiFromPropertiesObject (propertyGroupsObject) {
@@ -67,15 +69,16 @@ function createGuiFromPropertiesObject (propertyGroupsObject) {
 }
 
 export const App = (function () {
-  const _BLOCK_SIZE = 50
-  const _TILE_THICKNESS = 5
-  const _FLOOR_BLOCKS_SIZE = 5
+  const _BLOCK_SIZE = 20
+  const _TILE_THICKNESS = 2
+  const _FLOOR_BLOCKS_SIZE = 10
 
   const _COLOR_CHARACTER = 0x08b19a
   const _COLOR_TILES = 0xa0382c
   const _COLOR_LIGHT = 0xffffff
 
   let _rootDOMElement = null
+  let _stats = null
 
   let _size = null
 
@@ -93,14 +96,21 @@ export const App = (function () {
         type: 'coordinates',
         range: [-1000, 1000],
         step: 1,
-        value: { x: -150, y: 280, z: 400 },
+        value: { x: -200, y: 200, z: -200 },
         updateFn: _updateCameraPosition
+      },
+      target: {
+        type: 'coordinates',
+        range: [-1000, 1000],
+        step: 1,
+        value: { x: 0, y: 0, z: 0 },
+        updateFn: _updateCameraTarget
       },
       zoom: {
         type: 'value',
-        range: [0, 10],
+        range: [10, 100],
         step: 0.01,
-        value: 7,
+        value: 10,
         updateFn: _updateCameraZoom
       }
     },
@@ -116,7 +126,7 @@ export const App = (function () {
         type: 'coordinates',
         range: [-1000, 1000],
         step: 1,
-        value: { x: -150, y: 280, z: 400 },
+        value: { x: -150, y: 120, z: -50 },
         updateFn: _updateLightPosition
       },
       target: {
@@ -146,12 +156,14 @@ export const App = (function () {
     _syncSceneWithScreenSize()
 
     _initGui()
+    _initStats()
 
     _initCamera()
     _initRenderer()
     _initScene()
 
     _mountSceneToDOM()
+    _mountStatsToDOM()
 
     _initialRender()
     _initRenderLoop()
@@ -172,6 +184,10 @@ export const App = (function () {
     createGuiFromPropertiesObject(_sceneProperties)
   }
 
+  function _initStats () {
+    _stats = new Stats()
+  }
+
   function _initCamera () {
     _camera = new OrthographicCamera()
 
@@ -179,15 +195,12 @@ export const App = (function () {
     _updateCameraPosition()
     _updateCameraZoom()
 
-    _setCameraIsometricPerspective()
+    _updateCameraTarget()
   }
 
-  function _setCameraIsometricPerspective () {
-    const { atan, sqrt, PI } = Math
-
-    _camera.rotation.order = 'YXZ'
-    _camera.rotation.y = -PI / 4
-    _camera.rotation.x = atan(-1 / sqrt(2))
+  function _updateCameraTarget () {
+    const { x, y, z } = _sceneProperties.camera.target.value
+    _camera.lookAt(x, y, z)
   }
 
   function _initRenderer () {
@@ -221,10 +234,15 @@ export const App = (function () {
   function _initRenderLoop () {
     requestAnimationFrame(_initRenderLoop)
     _renderer.render(_scene, _camera)
+    _stats.update()
   }
 
   function _mountSceneToDOM () {
     _rootDOMElement.appendChild(_renderer.domElement)
+  }
+
+  function _mountStatsToDOM () {
+    _rootDOMElement.appendChild(_stats.dom)
   }
 
   function _initialRender () {
@@ -280,6 +298,7 @@ export const App = (function () {
     _light = new DirectionalLight(_COLOR_LIGHT, 5)
 
     _updateLightPosition()
+    _updateLightIntensity()
 
     _scene.add(_light)
     _scene.add(_light.target)
@@ -335,6 +354,26 @@ export const App = (function () {
       x,
       y + (_TILE_THICKNESS / 2) + (_BLOCK_SIZE / 2),
       z
+    )
+    _setCameraLookToCharacter()
+  }
+
+  function _setCameraLookToCharacter () {
+    const {
+      x,
+      y,
+      z
+    } = _sceneProperties.camera.position.value
+    const {
+      x: cx,
+      y: cy,
+      z: cz
+    } = _sceneProperties.character.position.value
+
+    _camera.position.set(
+      x + cx,
+      y + cy,
+      z + cz
     )
   }
 
