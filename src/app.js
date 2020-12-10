@@ -6,7 +6,9 @@ import {
   Scene,
   WebGLRenderer,
   DirectionalLight,
-  MeshStandardMaterial
+  MeshStandardMaterial,
+  Vector2,
+  Raycaster
 } from 'three'
 
 import Stats from 'three/examples/jsm/libs/stats.module.js'
@@ -71,11 +73,13 @@ function createGuiFromPropertiesObject (propertyGroupsObject) {
 export const App = (function () {
   const _BLOCK_SIZE = 20
   const _TILE_THICKNESS = 2
+  const _CURSOR_THICKNESS = 1
   const _FLOOR_BLOCKS_SIZE = 10
 
   const _COLOR_CHARACTER = 0x08b19a
   const _COLOR_TILES = 0xa0382c
   const _COLOR_LIGHT = 0xffffff
+  const _COLOR_INTERSECTION_CURSOR = 0xe6c34f
 
   let _rootDOMElement = null
   let _stats = null
@@ -89,6 +93,13 @@ export const App = (function () {
   let _light = null
 
   let _character = null
+
+  const _mouse = new Vector2()
+  const _raycaster = new Raycaster()
+
+  const _objects = []
+
+  let _intersectionCursor = null
 
   const _sceneProperties = {
     camera: {
@@ -167,6 +178,9 @@ export const App = (function () {
 
     _initialRender()
     _initRenderLoop()
+
+    document.addEventListener('mousemove', _handleMouseMove, false)
+    document.addEventListener('mousedown', _handleMouseDown, false)
 
     window.addEventListener('resize', _handleWindowResize, false)
   }
@@ -260,6 +274,39 @@ export const App = (function () {
     _addLight()
   }
 
+  function _updateOrAddIntersectionCursor (cursorPosition) {
+    if (_intersectionCursor === null) {
+      _addIntersectionCursor()
+    }
+
+    _updateIntersectionCursorPosition(cursorPosition)
+  }
+
+  function _updateIntersectionCursorPosition ({ x, y, z }) {
+    _intersectionCursor.position.set(x, y, z)
+  }
+
+  function _addIntersectionCursor () {
+    const geometry = new BoxBufferGeometry(
+      _BLOCK_SIZE,
+      _CURSOR_THICKNESS,
+      _BLOCK_SIZE
+    )
+
+    const material = new MeshStandardMaterial({
+      color: _COLOR_INTERSECTION_CURSOR
+    })
+
+    _intersectionCursor = new Mesh(geometry, material)
+
+    _scene.add(_intersectionCursor)
+  }
+
+  function _removeIntersectionCursor () {
+    _scene.remove(_intersectionCursor)
+    _intersectionCursor = null
+  }
+
   function _addTile ({ x, y, z }) {
     const geometry = new BoxBufferGeometry(
       _BLOCK_SIZE,
@@ -274,7 +321,31 @@ export const App = (function () {
     const mesh = new Mesh(geometry, material)
 
     mesh.position.set(x, y, z)
-    _scene.add(mesh)
+    _addObjectToScene(mesh)
+  }
+
+  function _getRandomColor () {
+    const { random } = Math
+
+    return (0xFFFFFF * random())
+  }
+
+  function _addBlockToCursorPosition () {
+    const geometry = new CubeGeometry(
+      _BLOCK_SIZE,
+      _BLOCK_SIZE,
+      _BLOCK_SIZE
+    )
+    const material = new MeshStandardMaterial({
+      color: _getRandomColor()
+    })
+
+    const block = new Mesh(geometry, material)
+
+    block.position.copy(_intersectionCursor.position)
+    block.position.y = _intersectionCursor.position.y + (_TILE_THICKNESS / 2) + (_BLOCK_SIZE / 2) - _CURSOR_THICKNESS
+
+    _addObjectToScene(block)
   }
 
   function _addCharacter () {
@@ -291,7 +362,7 @@ export const App = (function () {
 
     _updateCharacterPosition()
 
-    _scene.add(_character)
+    _addObjectToScene(_character)
   }
 
   function _addLight () {
@@ -302,6 +373,11 @@ export const App = (function () {
 
     _scene.add(_light)
     _scene.add(_light.target)
+  }
+
+  function _addObjectToScene (object) {
+    _scene.add(object)
+    _objects.push(object)
   }
 
   function _updateCameraFrustrum () {
@@ -364,6 +440,7 @@ export const App = (function () {
       y,
       z
     } = _sceneProperties.camera.position.value
+
     const {
       x: cx,
       y: cy,
@@ -382,6 +459,44 @@ export const App = (function () {
 
     _updateCameraFrustrum()
     _updateRendererSize()
+  }
+
+  function _handleMouseMove (event) {
+    const { clientX, clientY } = event
+    const { width, height } = _size
+
+    _mouse.set(
+      (clientX / width) * 2 - 1, // This is teh ratio [-1, 1]
+      -(clientY / height) * 2 + 1
+    )
+
+    _raycaster.setFromCamera(_mouse, _camera)
+    const intersections = _raycaster.intersectObjects(_objects)
+
+    const [nearestIntersection] = intersections
+
+    if (nearestIntersection) {
+      const { position, geometry } = nearestIntersection.object
+
+      geometry.computeBoundingBox()
+      const bbox = geometry.boundingBox
+
+      const cursorPosition = {
+        ...position,
+        y: position.y + bbox.max.y
+      }
+
+      _updateOrAddIntersectionCursor(cursorPosition)
+    } else {
+      _removeIntersectionCursor()
+    }
+  }
+
+  function _handleMouseDown () {
+    console.log('Hola')
+    if (_intersectionCursor !== null) {
+      _addBlockToCursorPosition()
+    }
   }
 
   return {
