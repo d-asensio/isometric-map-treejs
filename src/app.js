@@ -89,7 +89,6 @@ export const App = (function () {
 
   const _sceneProperties = {
     camera: {
-      type: 'folder',
       position: {
         type: 'coordinates',
         range: [-1000, 1000],
@@ -110,7 +109,7 @@ export const App = (function () {
         type: 'value',
         range: [0, 50],
         step: 0.1,
-        value: 5,
+        value: 2,
         updateFn: _updateLightIntensity
       },
       position: {
