@@ -19,6 +19,8 @@ import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader'
 
 import { GUI } from 'dat.gui'
 
+const { PI } = Math
+
 function createGuiFromPropertiesObject (propertyGroupsObject) {
   const gui = new GUI()
 
@@ -84,7 +86,7 @@ export const App = (function () {
   const _COLOR_LIGHT = 0xffffff
   const _COLOR_INTERSECTION_CURSOR = 0xe6c34f
 
-  const _CHARACTER_WALKING_URL = 'assets/models/character_walking.fbx'
+  const _CHARACTER_MODEL_URL = 'assets/models/michelle.fbx'
 
   let _rootDOMElement = null
   let _stats = null
@@ -97,9 +99,20 @@ export const App = (function () {
 
   let _light = null
 
-  let _character = null
+  const _characterPosition = { x: 0, y: 0, z: 0 }
 
-  let _characterAnimated = null
+  const _characterRotationByDirection = {
+    up: new Euler(0, PI / 4, 0),
+    right: new Euler(0, -PI / 4, 0),
+    down: new Euler(0, -PI + (PI / 4), 0),
+    left: new Euler(0, -PI - (PI / 4), 0)
+  }
+
+  let _characterDirection = 'up'
+
+  let _character = null
+  let _characterAnimation = null
+  let _characterAnimationMixer = null
 
   const _clock = new Clock()
   const _mouse = new Vector2()
@@ -156,15 +169,6 @@ export const App = (function () {
         value: { x: 0, y: 0, z: 0 },
         updateFn: _updateLightPosition
       }
-    },
-    character: {
-      position: {
-        type: 'coordinates',
-        range: [0, _FLOOR_BLOCKS_SIZE * _BLOCK_SIZE],
-        step: _BLOCK_SIZE,
-        value: { x: 0, y: 0, z: 0 },
-        updateFn: _updateCharacterPosition
-      }
     }
   }
 
@@ -191,10 +195,11 @@ export const App = (function () {
     _initialRender()
     _initRenderLoop()
 
-    document.addEventListener('mousemove', _handleMouseMove, false)
-    document.addEventListener('mousedown', _handleMouseDown, false)
-
     window.addEventListener('resize', _handleWindowResize, false)
+
+    _rootDOMElement.addEventListener('mousemove', _handleMouseMove, false)
+    _rootDOMElement.addEventListener('mousedown', _handleMouseDown, false)
+    _rootDOMElement.addEventListener('keydown', _handleKeyDown, false)
   }
 
   function _syncSceneWithScreenSize () {
@@ -262,8 +267,8 @@ export const App = (function () {
 
     const delta = _clock.getDelta()
 
-    if (_characterAnimated) {
-      _characterAnimated.update(delta)
+    if (_characterAnimationMixer) {
+      _characterAnimationMixer.update(delta)
     }
 
     _renderer.render(_scene, _camera)
@@ -291,21 +296,26 @@ export const App = (function () {
   }
 
   async function _loadCharacter () {
-    _character = await _loadCharacterObject()
+    _character = await _loadFBXObject(_CHARACTER_MODEL_URL)
+    const fbxObject = await _loadFBXObject('assets/animations/walking.fbx')
+
+    const [anim] = fbxObject.animations
+    _characterAnimation = anim
   }
 
   function _initCharacterAnimation () {
-    _characterAnimated = new AnimationMixer(_character)
+    _characterAnimationMixer = new AnimationMixer(_character)
 
-    console.log(_character.animations)
+    const action = _characterAnimationMixer.clipAction(
+      _characterAnimation
+    )
 
-    const action = _characterAnimated.clipAction(_character.animations[0])
     action.play()
   }
 
-  async function _loadCharacterObject () {
+  async function _loadFBXObject (url) {
     return new Promise((resolve, reject) => {
-      _loader.load(_CHARACTER_WALKING_URL, resolve)
+      _loader.load(url, resolve)
     })
   }
 
@@ -395,10 +405,7 @@ export const App = (function () {
     _character.scale.set(0.25, 0.25, 0.25)
 
     _updateCharacterPosition()
-
-    const rotationEuler = new Euler(0, -Math.PI, 0)
-
-    _character.setRotationFromEuler(rotationEuler)
+    _updateCharacterDirection()
 
     _scene.add(_character)
   }
@@ -463,13 +470,19 @@ export const App = (function () {
   }
 
   function _updateCharacterPosition () {
-    const { x, y, z } = _sceneProperties.character.position.value
+    const { x, y, z } = _characterPosition
     _character.position.set(
       x,
       y + (_TILE_THICKNESS / 2),
       z
     )
     _setCameraLookToCharacter()
+  }
+
+  function _updateCharacterDirection () {
+    const rotationEuler = _characterRotationByDirection[_characterDirection]
+
+    _character.setRotationFromEuler(rotationEuler)
   }
 
   function _setCameraLookToCharacter () {
@@ -483,7 +496,7 @@ export const App = (function () {
       x: cx,
       y: cy,
       z: cz
-    } = _sceneProperties.character.position.value
+    } = _characterPosition
 
     _camera.position.set(
       x + cx,
@@ -504,7 +517,7 @@ export const App = (function () {
     const { width, height } = _size
 
     _mouse.set(
-      (clientX / width) * 2 - 1, // This is teh ratio [-1, 1]
+      (clientX / width) * 2 - 1, // This is the ratio [-1, 1]
       -(clientY / height) * 2 + 1
     )
 
@@ -534,6 +547,38 @@ export const App = (function () {
     if (_intersectionCursor !== null) {
       _addBlockToCursorPosition()
     }
+  }
+
+  function _handleKeyDown (event) {
+    switch (event.code) {
+      case 'ArrowUp':
+        _characterPosition.x += _BLOCK_SIZE
+        _characterPosition.z += _BLOCK_SIZE
+
+        _characterDirection = 'up'
+        break
+      case 'ArrowDown':
+        _characterPosition.x -= _BLOCK_SIZE
+        _characterPosition.z -= _BLOCK_SIZE
+
+        _characterDirection = 'down'
+        break
+      case 'ArrowRight':
+        _characterPosition.x -= _BLOCK_SIZE
+        _characterPosition.z += _BLOCK_SIZE
+
+        _characterDirection = 'right'
+        break
+      case 'ArrowLeft':
+        _characterPosition.x += _BLOCK_SIZE
+        _characterPosition.z -= _BLOCK_SIZE
+
+        _characterDirection = 'left'
+        break
+    }
+
+    _updateCharacterPosition()
+    _updateCharacterDirection()
   }
 
   return {
