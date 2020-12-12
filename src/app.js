@@ -8,10 +8,14 @@ import {
   DirectionalLight,
   MeshStandardMaterial,
   Vector2,
-  Raycaster
+  Raycaster,
+  AnimationMixer,
+  Clock,
+  Euler
 } from 'three'
 
-import Stats from 'three/examples/jsm/libs/stats.module.js'
+import Stats from 'three/examples/jsm/libs/stats.module'
+import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader'
 
 import { GUI } from 'dat.gui'
 
@@ -76,10 +80,11 @@ export const App = (function () {
   const _CURSOR_THICKNESS = 1
   const _FLOOR_BLOCKS_SIZE = 10
 
-  const _COLOR_CHARACTER = 0x08b19a
   const _COLOR_TILES = 0xa0382c
   const _COLOR_LIGHT = 0xffffff
   const _COLOR_INTERSECTION_CURSOR = 0xe6c34f
+
+  const _CHARACTER_WALKING_URL = 'assets/models/character_walking.fbx'
 
   let _rootDOMElement = null
   let _stats = null
@@ -94,8 +99,12 @@ export const App = (function () {
 
   let _character = null
 
+  let _characterAnimated = null
+
+  const _clock = new Clock()
   const _mouse = new Vector2()
   const _raycaster = new Raycaster()
+  const _loader = new FBXLoader()
 
   const _objects = []
 
@@ -159,7 +168,7 @@ export const App = (function () {
     }
   }
 
-  function init (config) {
+  async function init (config) {
     const { rootDOMElement } = config
 
     _rootDOMElement = rootDOMElement
@@ -172,6 +181,9 @@ export const App = (function () {
     _initCamera()
     _initRenderer()
     _initScene()
+
+    await _loadCharacter()
+    _initCharacterAnimation()
 
     _mountSceneToDOM()
     _mountStatsToDOM()
@@ -247,6 +259,13 @@ export const App = (function () {
 
   function _initRenderLoop () {
     requestAnimationFrame(_initRenderLoop)
+
+    const delta = _clock.getDelta()
+
+    if (_characterAnimated) {
+      _characterAnimated.update(delta)
+    }
+
     _renderer.render(_scene, _camera)
     _stats.update()
   }
@@ -259,7 +278,7 @@ export const App = (function () {
     _rootDOMElement.appendChild(_stats.dom)
   }
 
-  function _initialRender () {
+  function _addTilePlane () {
     for (let x = 0; x <= _FLOOR_BLOCKS_SIZE; x++) {
       for (let z = 0; z <= _FLOOR_BLOCKS_SIZE; z++) {
         _addTile({
@@ -269,7 +288,29 @@ export const App = (function () {
         })
       }
     }
+  }
 
+  async function _loadCharacter () {
+    _character = await _loadCharacterObject()
+  }
+
+  function _initCharacterAnimation () {
+    _characterAnimated = new AnimationMixer(_character)
+
+    console.log(_character.animations)
+
+    const action = _characterAnimated.clipAction(_character.animations[0])
+    action.play()
+  }
+
+  async function _loadCharacterObject () {
+    return new Promise((resolve, reject) => {
+      _loader.load(_CHARACTER_WALKING_URL, resolve)
+    })
+  }
+
+  function _initialRender () {
+    _addTilePlane()
     _addCharacter()
     _addLight()
   }
@@ -349,20 +390,17 @@ export const App = (function () {
   }
 
   function _addCharacter () {
-    const geometry = new CubeGeometry(
-      _BLOCK_SIZE,
-      _BLOCK_SIZE,
-      _BLOCK_SIZE
-    )
-    const material = new MeshStandardMaterial({
-      color: _COLOR_CHARACTER
-    })
-
-    _character = new Mesh(geometry, material)
+    // Scale character to be in accordance with the block size
+    // TODO: Automate this taking into account the block size and the character bbox
+    _character.scale.set(0.25, 0.25, 0.25)
 
     _updateCharacterPosition()
 
-    _addObjectToScene(_character)
+    const rotationEuler = new Euler(0, -Math.PI, 0)
+
+    _character.setRotationFromEuler(rotationEuler)
+
+    _scene.add(_character)
   }
 
   function _addLight () {
@@ -428,7 +466,7 @@ export const App = (function () {
     const { x, y, z } = _sceneProperties.character.position.value
     _character.position.set(
       x,
-      y + (_TILE_THICKNESS / 2) + (_BLOCK_SIZE / 2),
+      y + (_TILE_THICKNESS / 2),
       z
     )
     _setCameraLookToCharacter()
@@ -493,7 +531,6 @@ export const App = (function () {
   }
 
   function _handleMouseDown () {
-    console.log('Hola')
     if (_intersectionCursor !== null) {
       _addBlockToCursorPosition()
     }
