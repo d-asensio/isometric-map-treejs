@@ -1,3 +1,4 @@
 body {
   background: $color--background;
+  overflow: hidden; // Avoids issues when scrolling to zoom
 }

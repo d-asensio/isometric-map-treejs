@@ -88,8 +88,11 @@ export const App = (function () {
 
   const _CHARACTER_MODEL_URL = 'assets/models/michelle.fbx'
 
+  const _SCENE_MIN_ZOOM = 5
+  const _SCENE_MAX_ZOOM = 50
+
   let _rootDOMElement = null
-  let _stats = null
+  const _stats = new Stats()
 
   let _size = null
 
@@ -123,6 +126,8 @@ export const App = (function () {
 
   let _intersectionCursor = null
 
+  let _zoom = 10
+
   const _sceneProperties = {
     camera: {
       position: {
@@ -138,13 +143,6 @@ export const App = (function () {
         step: 1,
         value: { x: 0, y: 0, z: 0 },
         updateFn: _updateCameraTarget
-      },
-      zoom: {
-        type: 'value',
-        range: [10, 100],
-        step: 0.01,
-        value: 10,
-        updateFn: _updateCameraZoom
       }
     },
     light: {
@@ -180,7 +178,6 @@ export const App = (function () {
     _syncSceneWithScreenSize()
 
     _initGui()
-    _initStats()
 
     _initCamera()
     _initRenderer()
@@ -200,6 +197,7 @@ export const App = (function () {
     _rootDOMElement.addEventListener('mousemove', _handleMouseMove, false)
     _rootDOMElement.addEventListener('mousedown', _handleMouseDown, false)
     _rootDOMElement.addEventListener('keydown', _handleKeyDown, false)
+    _rootDOMElement.addEventListener('wheel', _handleWheel, false)
   }
 
   function _syncSceneWithScreenSize () {
@@ -213,10 +211,6 @@ export const App = (function () {
 
   function _initGui () {
     createGuiFromPropertiesObject(_sceneProperties)
-  }
-
-  function _initStats () {
-    _stats = new Stats()
   }
 
   function _initCamera () {
@@ -265,6 +259,7 @@ export const App = (function () {
   function _initRenderLoop () {
     requestAnimationFrame(_initRenderLoop)
 
+    // Next character frame
     const delta = _clock.getDelta()
 
     if (_characterAnimationMixer) {
@@ -297,7 +292,7 @@ export const App = (function () {
 
   async function _loadCharacter () {
     _character = await _loadFBXObject(_CHARACTER_MODEL_URL)
-    const fbxObject = await _loadFBXObject('assets/animations/walking.fbx')
+    const fbxObject = await _loadFBXObject('assets/animations/jump.fbx')
 
     const [anim] = fbxObject.animations
     _characterAnimation = anim
@@ -387,6 +382,7 @@ export const App = (function () {
       _BLOCK_SIZE,
       _BLOCK_SIZE
     )
+
     const material = new MeshStandardMaterial({
       color: _getRandomColor()
     })
@@ -394,7 +390,7 @@ export const App = (function () {
     const block = new Mesh(geometry, material)
 
     block.position.copy(_intersectionCursor.position)
-    block.position.y = _intersectionCursor.position.y + (_TILE_THICKNESS / 2) + (_BLOCK_SIZE / 2) - _CURSOR_THICKNESS
+    block.position.y = _intersectionCursor.position.y + (_BLOCK_SIZE / 2) - (_CURSOR_THICKNESS / 2)
 
     _addObjectToScene(block)
   }
@@ -444,8 +440,7 @@ export const App = (function () {
   }
 
   function _updateCameraZoom () {
-    const { value } = _sceneProperties.camera.zoom
-    _camera.zoom = value
+    _camera.zoom = _zoom
     _camera.updateProjectionMatrix()
   }
 
@@ -500,7 +495,7 @@ export const App = (function () {
 
     _camera.position.set(
       x + cx,
-      y + cy,
+      y + cy + _BLOCK_SIZE, // Assumes that the character ia 2 block tall
       z + cz
     )
   }
@@ -534,7 +529,7 @@ export const App = (function () {
 
       const cursorPosition = {
         ...position,
-        y: position.y + bbox.max.y
+        y: position.y + bbox.max.y + (_CURSOR_THICKNESS / 2)
       }
 
       _updateOrAddIntersectionCursor(cursorPosition)
@@ -579,6 +574,23 @@ export const App = (function () {
 
     _updateCharacterPosition()
     _updateCharacterDirection()
+  }
+
+  function _handleWheel (e) {
+    const { min, max } = Math
+    const { deltaY } = e
+
+    const zoomIncrement = -deltaY / 10
+
+    const newZoom = _zoom += zoomIncrement
+
+    _zoom = max(_SCENE_MIN_ZOOM,
+      min(_SCENE_MAX_ZOOM,
+        newZoom
+      )
+    )
+
+    _updateCameraZoom()
   }
 
   return {
