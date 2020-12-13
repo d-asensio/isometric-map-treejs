@@ -65,9 +65,12 @@ export const App = (function () {
   let _characterDirection = 'up'
 
   let _character = null
-  let _characterAnimation = null
   let _characterAnimationMixer = null
   let _characterRouteTrace = null
+
+  const _characterAnimations = {}
+  let _characterActiveAnimation = null
+  let _characterActiveAnimationName = null
 
   let _characterRoute = []
 
@@ -144,7 +147,12 @@ export const App = (function () {
     _initRenderer()
     _initScene()
 
-    await _loadCharacter()
+    await Promise.all([
+      _loadCharacter(),
+      _loadCharacterAnimation('walking'),
+      _loadCharacterAnimation('idle')
+    ])
+
     _initCharacterAnimation()
 
     _mountSceneToDOM()
@@ -237,6 +245,8 @@ export const App = (function () {
       _characterPosition.z = newCharacterPosition.z
 
       _updateCharacterPosition()
+    } else {
+      _playCharacterAnimation('idle')
     }
 
     _renderer.render(_scene, _camera)
@@ -265,20 +275,41 @@ export const App = (function () {
 
   async function _loadCharacter () {
     _character = await _loadFBXObject(_CHARACTER_MODEL_URL)
-    const fbxObject = await _loadFBXObject('assets/animations/walking.fbx')
+  }
 
-    const [anim] = fbxObject.animations
-    _characterAnimation = anim
+  async function _loadCharacterAnimation (animationName) {
+    const fbxObject = await _loadFBXObject(`assets/animations/${animationName}.fbx`)
+
+    const [animation] = fbxObject.animations
+
+    _characterAnimations[animationName] = animation
   }
 
   function _initCharacterAnimation () {
     _characterAnimationMixer = new AnimationMixer(_character)
 
-    const action = _characterAnimationMixer.clipAction(
-      _characterAnimation
+    _playCharacterAnimation('idle')
+  }
+
+  function _playCharacterAnimation (animationName) {
+    if (animationName === _characterActiveAnimationName) return
+
+    if (_characterActiveAnimation !== null) {
+      _characterActiveAnimation.fadeOut(0.5)
+    }
+
+    const animation = _characterAnimations[animationName]
+
+    _characterActiveAnimation = _characterAnimationMixer.clipAction(
+      animation
     )
 
-    action.play()
+    _characterActiveAnimationName = animationName
+    _characterActiveAnimation.reset()
+      .setEffectiveTimeScale(1)
+      .setEffectiveWeight(1)
+      .fadeIn(0.5)
+      .play()
   }
 
   async function _loadFBXObject (url) {
@@ -374,11 +405,6 @@ export const App = (function () {
     const { x: characterX, z: characterZ } = _characterPosition
     const { x: cursorX, z: cursorZ } = _intersectionCursor.position
 
-    console.log(
-      [round(characterX / _BLOCK_SIZE), round(characterZ / _BLOCK_SIZE)], // Rounded and divided by the _BLOCK_SIZE since the route finder is discrete
-      [cursorX / _BLOCK_SIZE, cursorZ / _BLOCK_SIZE]
-    )
-
     const optimalRoute = _routeFinder.find(
       [round(characterX / _BLOCK_SIZE), round(characterZ / _BLOCK_SIZE)], // Rounded and divided by the _BLOCK_SIZE since the route finder is discrete
       [cursorX / _BLOCK_SIZE, cursorZ / _BLOCK_SIZE]
@@ -390,6 +416,7 @@ export const App = (function () {
 
     _updateCharacterRouteTrace()
     _routeTracer.setRoute(_characterRoute)
+    _playCharacterAnimation('walking')
   }
 
   function _addCharacter () {

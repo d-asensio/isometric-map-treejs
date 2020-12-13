@@ -62,7 +62,7 @@ export class RouteTracer {
   constructor () {
     this._routePath = null
 
-    this._velocity = 30
+    this._velocity = 35
     this._elapsedTimeInSeconds = 0
   }
 
