@@ -164,7 +164,7 @@ export class GridRouteFinder {
       const current = openSet.getPreferredCandidate()
 
       if (current.equals(endSpot)) {
-        return this._reconstructRoute(current) // Todo reconstruct the path
+        return this._reconstructRoute(current)
       }
 
       openSet.remove(current)
