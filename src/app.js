@@ -25,10 +25,6 @@ import { createGuiFromPropertiesObject } from './helpers'
 import { RouteTracer } from './route-tracer'
 import { GridRouteFinder } from './route-finder'
 
-const rf = new GridRouteFinder(10, 10)
-
-const laroute = rf.find([0, 0], [10, 7])
-
 const { PI } = Math
 
 export const App = (function () {
@@ -71,27 +67,19 @@ export const App = (function () {
   let _character = null
   let _characterAnimation = null
   let _characterAnimationMixer = null
+  let _characterRouteTrace = null
 
-  // const _characterRoute = [
-  //   [0, _TILE_THICKNESS, 0],
-  //   [0, _TILE_THICKNESS, 100],
-  //   [20, _TILE_THICKNESS, 100],
-  //   [20, _TILE_THICKNESS, 140],
-  //   [40, _TILE_THICKNESS, 140],
-  //   [40, _TILE_THICKNESS, 200],
-  //   [200, _TILE_THICKNESS, 200],
-  //   [200, _TILE_THICKNESS, 0],
-  //   [0, _TILE_THICKNESS, 0]
-  // ]
-
-  const _characterRoute = laroute.map(
-    ([x, y]) => [x * _BLOCK_SIZE, _TILE_THICKNESS, y * _BLOCK_SIZE]
-  )
+  let _characterRoute = []
 
   const _clock = new Clock()
   const _mouse = new Vector2()
   const _raycaster = new Raycaster()
   const _loader = new FBXLoader()
+
+  const _routeFinder = new GridRouteFinder(
+    _FLOOR_BLOCKS_SIZE,
+    _FLOOR_BLOCKS_SIZE
+  )
 
   const _routeTracer = new RouteTracer()
 
@@ -158,7 +146,6 @@ export const App = (function () {
 
     await _loadCharacter()
     _initCharacterAnimation()
-    _routeTracer.setRoute(_characterRoute)
 
     _mountSceneToDOM()
     _mountStatsToDOM()
@@ -242,19 +229,14 @@ export const App = (function () {
 
     _routeTracer.update(delta)
 
-    if (!_routeTracer.finished()) {
-      const [newCharacterPosition, newCharacterDirection] = _routeTracer.getPositionAndDirection()
+    if (_routeTracer.isPlaying()) {
+      const newCharacterPosition = _routeTracer.getPosition()
 
       _characterPosition.x = newCharacterPosition.x
       _characterPosition.y = newCharacterPosition.y
       _characterPosition.z = newCharacterPosition.z
 
-      _characterDirection = newCharacterDirection
-
       _updateCharacterPosition()
-      _updateCharacterDirection()
-    } else {
-      _routeTracer.reset()
     }
 
     _renderer.render(_scene, _camera)
@@ -387,6 +369,29 @@ export const App = (function () {
     _addObjectToScene(block)
   }
 
+  function _createRouteToCursorPosition () {
+    const { round } = Math
+    const { x: characterX, z: characterZ } = _characterPosition
+    const { x: cursorX, z: cursorZ } = _intersectionCursor.position
+
+    console.log(
+      [round(characterX / _BLOCK_SIZE), round(characterZ / _BLOCK_SIZE)], // Rounded and divided by the _BLOCK_SIZE since the route finder is discrete
+      [cursorX / _BLOCK_SIZE, cursorZ / _BLOCK_SIZE]
+    )
+
+    const optimalRoute = _routeFinder.find(
+      [round(characterX / _BLOCK_SIZE), round(characterZ / _BLOCK_SIZE)], // Rounded and divided by the _BLOCK_SIZE since the route finder is discrete
+      [cursorX / _BLOCK_SIZE, cursorZ / _BLOCK_SIZE]
+    )
+
+    _characterRoute = optimalRoute.map(
+      ([x, y]) => [x * _BLOCK_SIZE, _TILE_THICKNESS, y * _BLOCK_SIZE]
+    )
+
+    _updateCharacterRouteTrace()
+    _routeTracer.setRoute(_characterRoute)
+  }
+
   function _addCharacter () {
     // Scale character to be in accordance with the block size
     // TODO: Automate this taking into account the block size and the character bbox
@@ -418,17 +423,21 @@ export const App = (function () {
       color: 0x0000ff
     })
 
+    const geometry = new BufferGeometry()
+
+    _characterRouteTrace = new Line(geometry, material)
+
+    _updateCharacterRouteTrace()
+
+    _scene.add(_characterRouteTrace)
+  }
+
+  function _updateCharacterRouteTrace () {
     const routePoints = _characterRoute.map(
       ([x, y, z]) => new Vector3(x, y, z)
     )
 
-    const geometry = new BufferGeometry()
-
-    geometry.setFromPoints(routePoints)
-
-    const line = new Line(geometry, material)
-
-    _scene.add(line)
+    _characterRouteTrace.geometry.setFromPoints(routePoints)
   }
 
   function _updateCameraFrustrum () {
@@ -550,6 +559,7 @@ export const App = (function () {
 
   function _handleMouseDown () {
     if (_intersectionCursor !== null) {
+      _createRouteToCursorPosition()
       _addBlockToCursorPosition()
     }
   }
