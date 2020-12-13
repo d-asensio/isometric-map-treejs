@@ -11,70 +11,25 @@ import {
   Raycaster,
   AnimationMixer,
   Clock,
-  Euler
+  Euler,
+  LineBasicMaterial,
+  Vector3,
+  BufferGeometry,
+  Line
 } from 'three'
 
 import Stats from 'three/examples/jsm/libs/stats.module'
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader'
 
-import { GUI } from 'dat.gui'
+import { createGuiFromPropertiesObject } from './helpers'
+import { RouteTracer } from './route-tracer'
+import { GridRouteFinder } from './route-finder'
+
+const rf = new GridRouteFinder(10, 10)
+
+const laroute = rf.find([0, 0], [10, 7])
 
 const { PI } = Math
-
-function createGuiFromPropertiesObject (propertyGroupsObject) {
-  const gui = new GUI()
-
-  function createCoordinatesType (gui, propertyName, propertyDefinition) {
-    const { value, range, step, updateFn } = propertyDefinition
-    const folder = gui.addFolder(propertyName)
-
-    folder.open()
-
-    folder
-      .add(value, 'x', ...range, step)
-      .onChange(updateFn)
-
-    folder
-      .add(value, 'y', ...range, step)
-      .onChange(updateFn)
-
-    folder
-      .add(value, 'z', ...range, step)
-      .onChange(updateFn)
-  }
-
-  function createValueType (gui, propertyName, propertyDefinition) {
-    const { range, step, updateFn } = propertyDefinition
-    const folder = gui.addFolder(propertyName)
-
-    folder.open()
-
-    folder
-      .add(propertyDefinition, 'value', ...range, step)
-      .onChange(updateFn)
-  }
-
-  const propertyGroupsEntries = Object.entries(propertyGroupsObject)
-
-  for (const [groupName, groupProperties] of propertyGroupsEntries) {
-    const propertiesEntries = Object.entries(groupProperties)
-    const groupFolder = gui.addFolder(groupName)
-
-    groupFolder.open()
-
-    for (const [propertyName, propertyDefinition] of propertiesEntries) {
-      switch (propertyDefinition.type) {
-        case 'coordinates':
-          createCoordinatesType(groupFolder, propertyName, propertyDefinition)
-          break
-        default:
-          createValueType(groupFolder, propertyName, propertyDefinition)
-      }
-    }
-  }
-
-  return gui
-}
 
 export const App = (function () {
   const _BLOCK_SIZE = 20
@@ -105,10 +60,10 @@ export const App = (function () {
   const _characterPosition = { x: 0, y: 0, z: 0 }
 
   const _characterRotationByDirection = {
-    up: new Euler(0, PI / 4, 0),
-    right: new Euler(0, -PI / 4, 0),
-    down: new Euler(0, -PI + (PI / 4), 0),
-    left: new Euler(0, -PI - (PI / 4), 0)
+    up: new Euler(0, 0, 0),
+    right: new Euler(0, -PI / 2, 0),
+    down: new Euler(0, PI, 0),
+    left: new Euler(0, PI / 2, 0)
   }
 
   let _characterDirection = 'up'
@@ -117,10 +72,28 @@ export const App = (function () {
   let _characterAnimation = null
   let _characterAnimationMixer = null
 
+  // const _characterRoute = [
+  //   [0, _TILE_THICKNESS, 0],
+  //   [0, _TILE_THICKNESS, 100],
+  //   [20, _TILE_THICKNESS, 100],
+  //   [20, _TILE_THICKNESS, 140],
+  //   [40, _TILE_THICKNESS, 140],
+  //   [40, _TILE_THICKNESS, 200],
+  //   [200, _TILE_THICKNESS, 200],
+  //   [200, _TILE_THICKNESS, 0],
+  //   [0, _TILE_THICKNESS, 0]
+  // ]
+
+  const _characterRoute = laroute.map(
+    ([x, y]) => [x * _BLOCK_SIZE, _TILE_THICKNESS, y * _BLOCK_SIZE]
+  )
+
   const _clock = new Clock()
   const _mouse = new Vector2()
   const _raycaster = new Raycaster()
   const _loader = new FBXLoader()
+
+  const _routeTracer = new RouteTracer()
 
   const _objects = []
 
@@ -185,6 +158,7 @@ export const App = (function () {
 
     await _loadCharacter()
     _initCharacterAnimation()
+    _routeTracer.setRoute(_characterRoute)
 
     _mountSceneToDOM()
     _mountStatsToDOM()
@@ -266,6 +240,23 @@ export const App = (function () {
       _characterAnimationMixer.update(delta)
     }
 
+    _routeTracer.update(delta)
+
+    if (!_routeTracer.finished()) {
+      const [newCharacterPosition, newCharacterDirection] = _routeTracer.getPositionAndDirection()
+
+      _characterPosition.x = newCharacterPosition.x
+      _characterPosition.y = newCharacterPosition.y
+      _characterPosition.z = newCharacterPosition.z
+
+      _characterDirection = newCharacterDirection
+
+      _updateCharacterPosition()
+      _updateCharacterDirection()
+    } else {
+      _routeTracer.reset()
+    }
+
     _renderer.render(_scene, _camera)
     _stats.update()
   }
@@ -292,7 +283,7 @@ export const App = (function () {
 
   async function _loadCharacter () {
     _character = await _loadFBXObject(_CHARACTER_MODEL_URL)
-    const fbxObject = await _loadFBXObject('assets/animations/jump.fbx')
+    const fbxObject = await _loadFBXObject('assets/animations/walking.fbx')
 
     const [anim] = fbxObject.animations
     _characterAnimation = anim
@@ -316,6 +307,7 @@ export const App = (function () {
 
   function _initialRender () {
     _addTilePlane()
+    _addCharacterRouteTrace()
     _addCharacter()
     _addLight()
   }
@@ -419,6 +411,24 @@ export const App = (function () {
   function _addObjectToScene (object) {
     _scene.add(object)
     _objects.push(object)
+  }
+
+  function _addCharacterRouteTrace () {
+    const material = new LineBasicMaterial({
+      color: 0x0000ff
+    })
+
+    const routePoints = _characterRoute.map(
+      ([x, y, z]) => new Vector3(x, y, z)
+    )
+
+    const geometry = new BufferGeometry()
+
+    geometry.setFromPoints(routePoints)
+
+    const line = new Line(geometry, material)
+
+    _scene.add(line)
   }
 
   function _updateCameraFrustrum () {
