@@ -25,8 +25,6 @@ import { createGuiFromPropertiesObject } from './helpers'
 import { RouteTracer } from './route-tracer'
 import { GridRouteFinder } from './route-finder'
 
-const { PI } = Math
-
 export const App = (function () {
   const _BLOCK_SIZE = 20
   const _TILE_THICKNESS = 2
@@ -53,17 +51,6 @@ export const App = (function () {
 
   let _light = null
 
-  const _characterPosition = { x: 0, y: 0, z: 0 }
-
-  const _characterRotationByDirection = {
-    up: new Euler(0, 0, 0),
-    right: new Euler(0, -PI / 2, 0),
-    down: new Euler(0, PI, 0),
-    left: new Euler(0, PI / 2, 0)
-  }
-
-  let _characterDirection = 'up'
-
   let _character = null
   let _characterAnimationMixer = null
   let _characterRouteTrace = null
@@ -71,6 +58,9 @@ export const App = (function () {
   const _characterAnimations = {}
   let _characterActiveAnimation = null
   let _characterActiveAnimationName = null
+
+  let _characterPosition = new Vector3(0, 0, 0)
+  let _characterRotation = 0
 
   let _characterRoute = []
 
@@ -238,11 +228,9 @@ export const App = (function () {
     _routeTracer.update(delta)
 
     if (_routeTracer.isPlaying()) {
-      const newCharacterPosition = _routeTracer.getPosition()
+      const characterPosition = _routeTracer.getPosition()
 
-      _characterPosition.x = newCharacterPosition.x
-      _characterPosition.y = newCharacterPosition.y
-      _characterPosition.z = newCharacterPosition.z
+      _setCharacterPosition(characterPosition)
 
       _updateCharacterPosition()
     } else {
@@ -425,7 +413,6 @@ export const App = (function () {
     _character.scale.set(0.25, 0.25, 0.25)
 
     _updateCharacterPosition()
-    _updateCharacterDirection()
 
     _scene.add(_character)
   }
@@ -517,11 +504,13 @@ export const App = (function () {
       y + (_TILE_THICKNESS / 2),
       z
     )
+
+    _updateCharacterDirection()
     _setCameraLookToCharacter()
   }
 
   function _updateCharacterDirection () {
-    const rotationEuler = _characterRotationByDirection[_characterDirection]
+    const rotationEuler = new Euler(0, _characterRotation, 0)
 
     _character.setRotationFromEuler(rotationEuler)
   }
@@ -544,6 +533,28 @@ export const App = (function () {
       y + cy + _BLOCK_SIZE, // Assumes that the character ia 2 block tall
       z + cz
     )
+  }
+
+  function _setCharacterPosition (position) {
+    _characterRotation = _getCharacterRotationToPositon(position)
+    _characterPosition = position
+  }
+
+  function _getCharacterRotationToPositon (position) {
+    const { PI } = Math
+
+    const { x: x0, z: z0 } = position
+    const { x: x1, z: z1 } = _characterPosition
+
+    if (x0 > x1 && z0 > z1) return PI / 4
+    if (x0 < x1 && z0 < z1) return -PI + PI / 4
+    if (x0 > x1 && z0 < z1) return PI - PI / 4
+    if (x0 < x1 && z0 > z1) return -PI / 4
+
+    if (x0 > x1) return PI / 2
+    if (x0 < x1) return -PI / 2
+    if (z0 > z1) return 0
+    if (z0 < z1) return -PI
   }
 
   function _handleWindowResize () {
@@ -596,31 +607,22 @@ export const App = (function () {
       case 'ArrowUp':
         _characterPosition.x += _BLOCK_SIZE
         _characterPosition.z += _BLOCK_SIZE
-
-        _characterDirection = 'up'
         break
       case 'ArrowDown':
         _characterPosition.x -= _BLOCK_SIZE
         _characterPosition.z -= _BLOCK_SIZE
-
-        _characterDirection = 'down'
         break
       case 'ArrowRight':
         _characterPosition.x -= _BLOCK_SIZE
         _characterPosition.z += _BLOCK_SIZE
-
-        _characterDirection = 'right'
         break
       case 'ArrowLeft':
         _characterPosition.x += _BLOCK_SIZE
         _characterPosition.z -= _BLOCK_SIZE
-
-        _characterDirection = 'left'
         break
     }
 
     _updateCharacterPosition()
-    _updateCharacterDirection()
   }
 
   function _handleWheel (e) {
