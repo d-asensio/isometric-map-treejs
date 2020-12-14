@@ -64,6 +64,10 @@ export const App = (function () {
 
   let _characterRoute = []
 
+  const _obstaclesMap = []
+
+  let _isUserPressingCmdKey = false
+
   const _clock = new Clock()
   const _mouse = new Vector2()
   const _raycaster = new Raycaster()
@@ -137,6 +141,8 @@ export const App = (function () {
     _initRenderer()
     _initScene()
 
+    _initObstaclesMap()
+
     await Promise.all([
       _loadCharacter(),
       _loadCharacterAnimation('walking'),
@@ -156,6 +162,7 @@ export const App = (function () {
     _rootDOMElement.addEventListener('mousemove', _handleMouseMove, false)
     _rootDOMElement.addEventListener('mousedown', _handleMouseDown, false)
     _rootDOMElement.addEventListener('keydown', _handleKeyDown, false)
+    _rootDOMElement.addEventListener('keyup', _handleKeyUp, false)
     _rootDOMElement.addEventListener('wheel', _handleWheel, false)
   }
 
@@ -213,6 +220,15 @@ export const App = (function () {
 
   function _initScene () {
     _scene = new Scene()
+  }
+
+  function _initObstaclesMap () {
+    for (let x = 0; x <= _FLOOR_BLOCKS_SIZE; x++) {
+      for (let z = 0; z <= _FLOOR_BLOCKS_SIZE; z++) {
+        if (!_obstaclesMap[x]) _obstaclesMap[x] = []
+        _obstaclesMap[x][z] = 0
+      }
+    }
   }
 
   function _initRenderLoop () {
@@ -370,6 +386,8 @@ export const App = (function () {
   }
 
   function _addBlockToCursorPosition () {
+    const { x, y, z } = _intersectionCursor.position
+
     const geometry = new CubeGeometry(
       _BLOCK_SIZE,
       _BLOCK_SIZE,
@@ -382,8 +400,11 @@ export const App = (function () {
 
     const block = new Mesh(geometry, material)
 
-    block.position.copy(_intersectionCursor.position)
-    block.position.y = _intersectionCursor.position.y + (_BLOCK_SIZE / 2) - (_CURSOR_THICKNESS / 2)
+    block.position.x = x
+    block.position.y = y + (_BLOCK_SIZE / 2) - (_CURSOR_THICKNESS / 2)
+    block.position.z = z
+
+    _obstaclesMap[x / _BLOCK_SIZE][z / _BLOCK_SIZE] = 1
 
     _addObjectToScene(block)
   }
@@ -395,7 +416,8 @@ export const App = (function () {
 
     const optimalRoute = _routeFinder.find(
       [round(characterX / _BLOCK_SIZE), round(characterZ / _BLOCK_SIZE)], // Rounded and divided by the _BLOCK_SIZE since the route finder is discrete
-      [cursorX / _BLOCK_SIZE, cursorZ / _BLOCK_SIZE]
+      [cursorX / _BLOCK_SIZE, cursorZ / _BLOCK_SIZE],
+      _obstaclesMap
     )
 
     _characterRoute = optimalRoute.map(
@@ -597,32 +619,30 @@ export const App = (function () {
 
   function _handleMouseDown () {
     if (_intersectionCursor !== null) {
-      _createRouteToCursorPosition()
-      _addBlockToCursorPosition()
+      if (_isUserPressingCmdKey) {
+        _addBlockToCursorPosition()
+      } else {
+        _createRouteToCursorPosition()
+      }
     }
   }
 
   function _handleKeyDown (event) {
     switch (event.code) {
-      case 'ArrowUp':
-        _characterPosition.x += _BLOCK_SIZE
-        _characterPosition.z += _BLOCK_SIZE
-        break
-      case 'ArrowDown':
-        _characterPosition.x -= _BLOCK_SIZE
-        _characterPosition.z -= _BLOCK_SIZE
-        break
-      case 'ArrowRight':
-        _characterPosition.x -= _BLOCK_SIZE
-        _characterPosition.z += _BLOCK_SIZE
-        break
-      case 'ArrowLeft':
-        _characterPosition.x += _BLOCK_SIZE
-        _characterPosition.z -= _BLOCK_SIZE
+      case 'MetaLeft':
+      case 'MetaRight':
+        _isUserPressingCmdKey = true
         break
     }
+  }
 
-    _updateCharacterPosition()
+  function _handleKeyUp (event) {
+    switch (event.code) {
+      case 'MetaLeft':
+      case 'MetaRight':
+        _isUserPressingCmdKey = false
+        break
+    }
   }
 
   function _handleWheel (e) {

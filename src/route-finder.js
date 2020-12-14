@@ -122,7 +122,7 @@ export class GridRouteFinder {
     return candidate.euclidianDistanceTo(end)
   }
 
-  _addOptimalNeighbor (openSet, spot, endSpot) {
+  _addOptimalNeighbor (openSet, spot, endSpot, obstaclesMap) {
     for (let xOffset = -1; xOffset <= 1; xOffset++) {
       for (let yOffset = -1; yOffset <= 1; yOffset++) {
         if (xOffset === 0 && yOffset === 0) continue // Same node
@@ -132,6 +132,7 @@ export class GridRouteFinder {
 
         if (neighborX > this._mapWidth || neighborX < 0) continue // Outside map widht
         if (neighborY > this._mapHeight || neighborY < 0) continue // Outside map height
+        if (obstaclesMap[neighborX][neighborY] === 1) continue // There is an obstacle there!
 
         const neighbor = openSet.getByCoordinates([neighborX, neighborY])
 
@@ -150,7 +151,7 @@ export class GridRouteFinder {
     }
   }
 
-  find (start, end) {
+  find (start, end, obstaclesMap) {
     const startSpot = new Spot(...start)
     const endSpot = new Spot(...end)
 
@@ -169,7 +170,7 @@ export class GridRouteFinder {
 
       openSet.remove(current)
 
-      this._addOptimalNeighbor(openSet, current, endSpot)
+      this._addOptimalNeighbor(openSet, current, endSpot, obstaclesMap)
     }
 
     throw new Error('No possible route')
